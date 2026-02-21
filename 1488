@@ -29,8 +29,13 @@ local Settings = {
     AutoShoot = true,
     AutoGrannyTasks = true,
     ESPGranny = true,
-    ESPWeapons = true
+    ESPWeapons = true,
+    MagnetItems = true  -- Магнит предметов к бабушке
 }
+
+-- ============ ESP ТАБЛИЦЫ ============
+local grannyESP = {}
+local itemESP = {}
 
 -- ============ GUI ============
 local ScreenGui = Instance.new("ScreenGui")
@@ -88,6 +93,8 @@ CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseButton
 
 CloseButton.MouseButton1Click:Connect(function()
+    print("Нажата кнопка закрытия!")
+    
     -- Выключаем все функции
     Settings.AutoPickupKeys = false
     Settings.AutoOpenChests = false
@@ -96,22 +103,41 @@ CloseButton.MouseButton1Click:Connect(function()
     Settings.AutoGrannyTasks = false
     Settings.ESPGranny = false
     Settings.ESPWeapons = false
+    Settings.MagnetItems = false
+    
+    print("Функции выключены")
     
     -- Удаляем все ESP
     for player, espData in pairs(grannyESP) do
-        espData.Highlight:Destroy()
-        espData.BillboardGui:Destroy()
+        pcall(function()
+            espData.Highlight:Destroy()
+            espData.BillboardGui:Destroy()
+        end)
         grannyESP[player] = nil
     end
     
     for tool, espData in pairs(itemESP) do
-        espData[1]:Destroy()
-        espData[2]:Destroy()
+        pcall(function()
+            espData[1]:Destroy()
+            espData[2]:Destroy()
+        end)
         itemESP[tool] = nil
     end
     
-    -- Удаляем GUI полностью (включая кнопку MENU)
-    ScreenGui:Destroy()
+    print("ESP удален")
+    
+    -- Удаляем GUI полностью
+    if ScreenGui then
+        print("Удаляем ScreenGui...")
+        ScreenGui.Enabled = false
+        task.wait(0.1)
+        ScreenGui.Parent = nil
+        task.wait(0.1)
+        ScreenGui:Destroy()
+        print("ScreenGui удален!")
+    end
+    
+    print("Скрипт полностью выгружен!")
 end)
 
 -- Кнопка скрытия/показа меню
@@ -244,6 +270,7 @@ CreateToggle("Автострельба", "AutoShoot", "Автоматическ�
 CreateToggle("Авто задания бабушки", "AutoGrannyTasks", "Выполняет задания (Granny)")
 CreateToggle("ESP Бабушка", "ESPGranny", "Подсветка бабушки (красный)")
 CreateToggle("ESP Оружие", "ESPWeapons", "Подсветка оружия (желтый)")
+CreateToggle("Магнит предметов", "MagnetItems", "Предметы притягиваются к бабушке")
 
 -- Обновляем размер canvas
 Container.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
@@ -465,7 +492,7 @@ spawn(function()
                             local distance = (player.Character.PrimaryPart.Position - equippedTool.PrimaryPart.Position).Magnitude
                             
                             -- Максимальная дальность стрельбы/броска (в стадах)
-                            local maxRange = isShootable and 150 or 100
+                            local maxRange = isShootable and 80 or 60
                             
                             if distance <= maxRange then
                                 -- Передаем позицию оружия в проверку видимости
@@ -514,10 +541,140 @@ end)
 
 print("Автофарм активен: ключи, сундуки, оружие, автострельба, задания")
 
--- ============ ESP ============
-local grannyESP = {}
-local itemESP = {}
+-- ============ МАГНИТ ПРЕДМЕТОВ ============
+-- Притягивает брошенные предметы к бабушке с обходом препятствий
+local processedItems = {}  -- Список обработанных предметов
+local itemStuckTime = {}  -- Время застревания предметов
 
+spawn(function()
+    while task.wait(0.03) do
+        pcall(function()
+            if Settings.MagnetItems and workspace:FindFirstChild("Thrown") then
+                for _, thrownItem in pairs(workspace.Thrown:GetChildren()) do
+                    if thrownItem:IsA("Model") and thrownItem.PrimaryPart and not processedItems[thrownItem] then
+                        -- Ищем ближайшую бабушку
+                        local closestGranny = nil
+                        local closestDistance = math.huge
+                        
+                        for _, player in pairs(Players:GetPlayers()) do
+                            if player.Status.Team.Value == "Granny" and player.Character and player.Character.PrimaryPart then
+                                local distance = (player.Character.PrimaryPart.Position - thrownItem.PrimaryPart.Position).Magnitude
+                                if distance < closestDistance then
+                                    closestDistance = distance
+                                    closestGranny = player
+                                end
+                            end
+                        end
+                        
+                        if closestGranny and closestGranny.Character and closestGranny.Character.PrimaryPart then
+                            local targetPos = closestGranny.Character.PrimaryPart.Position
+                            local itemPos = thrownItem.PrimaryPart.Position
+                            local distance = (targetPos - itemPos).Magnitude
+                            local velocity = thrownItem.PrimaryPart.AssemblyLinearVelocity.Magnitude
+                            
+                            -- Проверка на застревание: если предмет далеко и почти не двигается
+                            if distance > 10 and velocity < 3 then
+                                if not itemStuckTime[thrownItem] then
+                                    itemStuckTime[thrownItem] = tick()
+                                elseif tick() - itemStuckTime[thrownItem] > 1 then
+                                    -- Предмет застрял больше 1 секунды - отпускаем
+                                    processedItems[thrownItem] = true
+                                    itemStuckTime[thrownItem] = nil
+                                    print("Предмет застрял в стене, отпускаем:", thrownItem.Name)
+                                    
+                                    thrownItem.AncestryChanged:Connect(function()
+                                        if not thrownItem:IsDescendantOf(workspace) then
+                                            processedItems[thrownItem] = nil
+                                        end
+                                    end)
+                                    
+                                    return
+                                end
+                            else
+                                -- Предмет движется нормально - сбрасываем таймер
+                                itemStuckTime[thrownItem] = nil
+                            end
+                            
+                            -- Если предмет очень близко к бабушке (меньше 5 стадов)
+                            if distance < 5 then
+                                if velocity < 2 then
+                                    processedItems[thrownItem] = true
+                                    print("Предмет прилип (урон зарегал):", thrownItem.Name)
+                                else
+                                    processedItems[thrownItem] = true
+                                    print("Предмет не прилип (урон не зарегал), отпускаем:", thrownItem.Name)
+                                end
+                                
+                                itemStuckTime[thrownItem] = nil
+                                
+                                thrownItem.AncestryChanged:Connect(function()
+                                    if not thrownItem:IsDescendantOf(workspace) then
+                                        processedItems[thrownItem] = nil
+                                    end
+                                end)
+                            else
+                                -- Проверяем прямой путь к бабушке
+                                local rayParams = RaycastParams.new()
+                                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                                rayParams.FilterDescendantsInstances = {thrownItem, closestGranny.Character}
+                                
+                                local direction = targetPos - itemPos
+                                local rayResult = workspace:Raycast(itemPos, direction, rayParams)
+                                
+                                local attractionDirection = direction.Unit
+                                
+                                -- Если есть препятствие - пытаемся обойти
+                                if rayResult then
+                                    local hitPart = rayResult.Instance
+                                    local hitParent = hitPart.Parent
+                                    
+                                    local isObstacle = false
+                                    if hitPart.Name == "Glass" or hitParent.Name == "Walls" or hitParent.Name == "Wall" then
+                                        isObstacle = true
+                                    elseif hitParent.Name == "Doors" or hitParent.Name == "Door" or hitPart.Name:find("Door") then
+                                        isObstacle = true
+                                    elseif hitPart.CanCollide then
+                                        isObstacle = true
+                                    end
+                                    
+                                    if isObstacle then
+                                        -- Вычисляем направление обхода (перпендикулярно к препятствию)
+                                        local hitNormal = rayResult.Normal
+                                        local rightDirection = direction:Cross(Vector3.new(0, 1, 0)).Unit
+                                        local upDirection = Vector3.new(0, 1, 0)
+                                        
+                                        -- Пробуем обойти справа, слева или сверху
+                                        local bypassDirections = {
+                                            (direction.Unit + rightDirection * 0.5 + upDirection * 0.3).Unit,
+                                            (direction.Unit - rightDirection * 0.5 + upDirection * 0.3).Unit,
+                                            (direction.Unit + upDirection * 0.7).Unit
+                                        }
+                                        
+                                        -- Выбираем лучшее направление обхода
+                                        for _, bypassDir in ipairs(bypassDirections) do
+                                            local testRay = workspace:Raycast(itemPos, bypassDir * 10, rayParams)
+                                            if not testRay then
+                                                attractionDirection = bypassDir
+                                                break
+                                            end
+                                        end
+                                    end
+                                end
+                                
+                                -- Применяем силу притяжения
+                                local currentVelocity = thrownItem.PrimaryPart.AssemblyLinearVelocity
+                                local magnetForce = attractionDirection * 15
+                                thrownItem.PrimaryPart.AssemblyLinearVelocity = currentVelocity + magnetForce
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- ============ ESP ============
 -- Функция создания ESP для бабушки
 local function UpdateGrannyESP()
     if not Settings.ESPGranny then
