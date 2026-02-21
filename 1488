@@ -396,16 +396,16 @@ local function CanSeeTarget(target, weaponPosition)
     return visiblePoints >= 2
 end
 
--- Автосбор ключей (только для Toddler)
+-- БЫСТРЫЙ автосбор ключей (только для Toddler)
 spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.2) do -- Оптимальная скорость
         pcall(function()
             if Settings.AutoPickupKeys and LocalPlayer.Status.Team.Value == "Toddler" and LocalPlayer.Status.Keys.Value < 3 then
                 if workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Keys") then
                     for _, key in pairs(workspace.Map.Keys:GetChildren()) do
                         if key:IsA("BasePart") or key:IsA("Model") then
                             PickupKey:Fire(true, key)
-                            task.wait(0.1)
+                            task.wait(0.05) -- Маленькая задержка между ключами
                         end
                     end
                 end
@@ -414,16 +414,16 @@ spawn(function()
     end
 end)
 
--- Автооткрытие сундуков (только для Toddler)
+-- БЫСТРОЕ автооткрытие сундуков (только для Toddler)
 spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.2) do -- Оптимальная скорость
         pcall(function()
             if Settings.AutoOpenChests and LocalPlayer.Status.Team.Value == "Toddler" then
                 if workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Chests") then
                     for _, chest in pairs(workspace.Map.Chests:GetChildren()) do
                         if not chest:GetAttribute("IsOpened") then
                             OpenChest:Fire(true, chest)
-                            task.wait(0.1)
+                            task.wait(0.05) -- Маленькая задержка между сундуками
                         end
                     end
                 end
@@ -432,9 +432,9 @@ spawn(function()
     end
 end)
 
--- Автосбор оружия (только для Toddler, только если нет оружия)
+-- БЫСТРЫЙ автосбор оружия (только для Toddler, только если нет оружия)
 spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.1) do -- Быстро!
         pcall(function()
             if Settings.AutoPickupWeapons and LocalPlayer.Status.Team.Value == "Toddler" then
                 local hasTool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
@@ -455,7 +455,6 @@ spawn(function()
                         
                         if closestTool then
                             PickupTool:Fire(true, closestTool.Name, closestTool, closestTool:GetAttribute("UniqueThrownId"))
-                            task.wait(0.5)
                         end
                     end
                 end
@@ -464,9 +463,9 @@ spawn(function()
     end
 end)
 
--- Автострельба по бабушке (бросок оружия или стрельба)
+-- АГРЕССИВНАЯ автострельба по бабушке (бросок оружия или стрельба)
 spawn(function()
-    while task.wait(0.1) do
+    while task.wait(0.05) do -- ОЧЕНЬ БЫСТРО!
         pcall(function()
             if Settings.AutoShoot and LocalPlayer.Status.Team.Value == "Toddler" then
                 local equippedTool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
@@ -501,7 +500,6 @@ spawn(function()
                                         -- Стреляем из оружия
                                         local FireTool = Warp.Client("FireTool")
                                         FireTool:Fire(false, equippedTool, player.Character.PrimaryPart.Position)
-                                        print("Стреляю из:", equippedTool.Name, "дистанция:", math.floor(distance))
                                     else
                                         -- Бросаем оружие
                                         local targetPos = player.Character.PrimaryPart.Position - Vector3.new(0, 2, 0)
@@ -510,9 +508,8 @@ spawn(function()
                                         local predictedPos = targetPos + (velocity * travelTime)
                                         
                                         IndicateThrowTool:Fire(true, equippedTool, predictedPos, 70)
-                                        print("Бросаю:", equippedTool.Name, "дистанция:", math.floor(distance))
                                     end
-                                    task.wait(1)
+                                    task.wait(0.3) -- Короткая задержка между выстрелами
                                 end
                             end
                         end
@@ -523,15 +520,14 @@ spawn(function()
     end
 end)
 
--- Автовыполнение заданий (только для Granny)
+-- БЫСТРОЕ автовыполнение заданий (только для Granny)
 spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.1) do -- Быстро!
         pcall(function()
             if Settings.AutoGrannyTasks and LocalPlayer.Status.Team.Value == "Granny" then
                 if workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("TaskItems") then
                     for _, taskItem in pairs(workspace.Map.TaskItems:GetChildren()) do
                         CompleteGrannyTask:Fire(true, taskItem)
-                        task.wait(0.1)
                     end
                 end
             end
@@ -539,7 +535,12 @@ spawn(function()
     end
 end)
 
-print("Автофарм активен: ключи, сундуки, оружие, автострельба, задания")
+print("Автофарм активен: ОПТИМИЗИРОВАННАЯ СКОРОСТЬ!")
+print("- Ключи: каждые 0.2 сек (с задержкой 0.05 между ключами)")
+print("- Сундуки: каждые 0.2 сек (с задержкой 0.05 между сундуками)")
+print("- Оружие: каждые 0.1 сек")
+print("- Стрельба: каждые 0.05 сек (задержка 0.3 сек между выстрелами)")
+print("- Задания бабушки: каждые 0.1 сек")
 
 -- ============ МАГНИТ ПРЕДМЕТОВ ============
 -- Притягивает брошенные предметы к бабушке с обходом препятствий
