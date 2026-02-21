@@ -1,0 +1,690 @@
+-- Destroy Grandma [VALENTINES] - Auto Farm + ESP
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- Загружаем Warp
+local Warp = require(ReplicatedStorage.Network.Warp)
+
+-- Создаем RemoteEvents
+local PickupKey = Warp.Client("PickupKey")
+local PickupTool = Warp.Client("PickupTool")
+local OpenChest = Warp.Client("OpenChest")
+local CompleteGrannyTask = Warp.Client("CompleteGrannyTask")
+local IndicateThrowTool = Warp.Client("IndicateThrowTool")
+
+-- Ждем персонажа
+repeat task.wait() until LocalPlayer.Character
+
+print("Auto Farm + ESP загружен!")
+
+-- ============ НАСТРОЙКИ ============
+local Settings = {
+    AutoPickupKeys = true,
+    AutoOpenChests = true,
+    AutoPickupWeapons = true,
+    AutoShoot = true,
+    AutoGrannyTasks = true,
+    ESPGranny = true,
+    ESPWeapons = true
+}
+
+-- ============ GUI ============
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DestroyGrandmaGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Главное окно
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.5, -200, 0.5, -200)
+MainFrame.Size = UDim2.new(0, 400, 0, 400)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+-- Закругление углов
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
+
+-- Заголовок
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Parent = MainFrame
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.BorderSizePixel = 0
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Font = Enum.Font.SourceSansBold
+Title.Text = "Destroy Grandma Auto Farm"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 20
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = Title
+
+-- Кнопка закрытия
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Parent = Title
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+CloseButton.BorderSizePixel = 0
+CloseButton.Position = UDim2.new(1, -35, 0, 5)
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Font = Enum.Font.SourceSansBold
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 18
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.Parent = CloseButton
+
+CloseButton.MouseButton1Click:Connect(function()
+    -- Выключаем все функции
+    Settings.AutoPickupKeys = false
+    Settings.AutoOpenChests = false
+    Settings.AutoPickupWeapons = false
+    Settings.AutoShoot = false
+    Settings.AutoGrannyTasks = false
+    Settings.ESPGranny = false
+    Settings.ESPWeapons = false
+    
+    -- Удаляем все ESP
+    for player, espData in pairs(grannyESP) do
+        espData.Highlight:Destroy()
+        espData.BillboardGui:Destroy()
+        grannyESP[player] = nil
+    end
+    
+    for tool, espData in pairs(itemESP) do
+        espData[1]:Destroy()
+        espData[2]:Destroy()
+        itemESP[tool] = nil
+    end
+    
+    -- Удаляем GUI полностью (включая кнопку MENU)
+    ScreenGui:Destroy()
+end)
+
+-- Кнопка скрытия/показа меню
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Parent = ScreenGui
+ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+ToggleButton.BorderSizePixel = 0
+ToggleButton.Position = UDim2.new(0, 10, 0.5, -25)
+ToggleButton.Size = UDim2.new(0, 50, 0, 50)
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.Text = "MENU"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 14
+ToggleButton.Visible = false
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 10)
+ToggleCorner.Parent = ToggleButton
+
+ToggleButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = true
+    ToggleButton.Visible = false
+end)
+
+-- Кнопка минимизации в заголовке
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "MinimizeButton"
+MinimizeButton.Parent = Title
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+MinimizeButton.BorderSizePixel = 0
+MinimizeButton.Position = UDim2.new(1, -70, 0, 5)
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Font = Enum.Font.SourceSansBold
+MinimizeButton.Text = "-"
+MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeButton.TextSize = 20
+
+local MinimizeCorner = Instance.new("UICorner")
+MinimizeCorner.CornerRadius = UDim.new(0, 8)
+MinimizeCorner.Parent = MinimizeButton
+
+MinimizeButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    ToggleButton.Visible = true
+end)
+
+-- Контейнер для переключателей
+local Container = Instance.new("ScrollingFrame")
+Container.Name = "Container"
+Container.Parent = MainFrame
+Container.BackgroundTransparency = 1
+Container.BorderSizePixel = 0
+Container.Position = UDim2.new(0, 10, 0, 50)
+Container.Size = UDim2.new(1, -20, 1, -60)
+Container.CanvasSize = UDim2.new(0, 0, 0, 0)
+Container.ScrollBarThickness = 6
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = Container
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 10)
+
+-- Функция создания переключателя
+local function CreateToggle(name, settingKey, description)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Name = name
+    ToggleFrame.Parent = Container
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 60)
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 8)
+    ToggleCorner.Parent = ToggleFrame
+    
+    local ToggleLabel = Instance.new("TextLabel")
+    ToggleLabel.Parent = ToggleFrame
+    ToggleLabel.BackgroundTransparency = 1
+    ToggleLabel.Position = UDim2.new(0, 10, 0, 5)
+    ToggleLabel.Size = UDim2.new(1, -70, 0, 25)
+    ToggleLabel.Font = Enum.Font.SourceSansBold
+    ToggleLabel.Text = name
+    ToggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleLabel.TextSize = 16
+    ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local ToggleDesc = Instance.new("TextLabel")
+    ToggleDesc.Parent = ToggleFrame
+    ToggleDesc.BackgroundTransparency = 1
+    ToggleDesc.Position = UDim2.new(0, 10, 0, 30)
+    ToggleDesc.Size = UDim2.new(1, -70, 0, 20)
+    ToggleDesc.Font = Enum.Font.SourceSans
+    ToggleDesc.Text = description
+    ToggleDesc.TextColor3 = Color3.fromRGB(180, 180, 180)
+    ToggleDesc.TextSize = 14
+    ToggleDesc.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Parent = ToggleFrame
+    ToggleButton.BackgroundColor3 = Settings[settingKey] and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Position = UDim2.new(1, -55, 0.5, -15)
+    ToggleButton.Size = UDim2.new(0, 50, 0, 30)
+    ToggleButton.Font = Enum.Font.SourceSansBold
+    ToggleButton.Text = Settings[settingKey] and "ON" or "OFF"
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.TextSize = 14
+    
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 6)
+    ButtonCorner.Parent = ToggleButton
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        Settings[settingKey] = not Settings[settingKey]
+        ToggleButton.Text = Settings[settingKey] and "ON" or "OFF"
+        
+        local targetColor = Settings[settingKey] and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+        TweenService:Create(ToggleButton, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+    end)
+    
+    return ToggleFrame
+end
+
+-- Создаем переключатели
+CreateToggle("Автосбор ключей", "AutoPickupKeys", "Автоматически собирает ключи (Toddler)")
+CreateToggle("Автооткрытие сундуков", "AutoOpenChests", "Автоматически открывает сундуки (Toddler)")
+CreateToggle("Автосбор оружия", "AutoPickupWeapons", "Подбирает ближайшее оружие")
+CreateToggle("Автострельба", "AutoShoot", "Автоматически стреляет в бабушку")
+CreateToggle("Авто задания бабушки", "AutoGrannyTasks", "Выполняет задания (Granny)")
+CreateToggle("ESP Бабушка", "ESPGranny", "Подсветка бабушки (красный)")
+CreateToggle("ESP Оружие", "ESPWeapons", "Подсветка оружия (желтый)")
+
+-- Обновляем размер canvas
+Container.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Container.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+-- Добавляем GUI в игру
+if gethui then
+    ScreenGui.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = game:GetService("CoreGui")
+else
+    ScreenGui.Parent = game:GetService("CoreGui")
+end
+
+print("GUI создан!")
+
+-- Функция проверки видимости через стены
+local function CanSeeTarget(target, weaponPosition)
+    if not LocalPlayer.Character or not LocalPlayer.Character.PrimaryPart then
+        return false
+    end
+    
+    if not target.Character or not target.Character.PrimaryPart then
+        return false
+    end
+    
+    -- Используем позицию оружия если есть, иначе позицию головы персонажа
+    local shootFrom = weaponPosition or (LocalPlayer.Character:FindFirstChild("Head") and LocalPlayer.Character.Head.Position) or LocalPlayer.Character.PrimaryPart.Position
+    
+    -- Дополнительно проверяем что сам игрок не за стеной (проверка от головы игрока)
+    local playerHead = LocalPlayer.Character:FindFirstChild("Head")
+    if playerHead then
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, target.Character}
+        
+        local direction = target.Character.PrimaryPart.Position - playerHead.Position
+        local rayResult = workspace:Raycast(playerHead.Position, direction, rayParams)
+        
+        if rayResult then
+            local hitPart = rayResult.Instance
+            local hitParent = hitPart.Parent
+            
+            -- Если между головой игрока и бабушкой есть препятствие - не стреляем
+            if hitPart.Name == "Glass" or hitParent.Name == "Walls" or hitParent.Name == "Wall" then
+                return false
+            end
+            if hitParent.Name == "Doors" or hitParent.Name == "Door" or hitPart.Name:find("Door") then
+                return false
+            end
+            if hitPart.CanCollide then
+                return false
+            end
+            if hitParent.Parent and hitParent.Parent.Name == "Map" then
+                if hitParent.Name ~= "Tools" and hitParent.Name ~= "Keys" and hitParent.Name ~= "Chests" then
+                    return false
+                end
+            end
+        end
+    end
+    
+    -- Проверяем несколько точек на теле бабушки
+    local checkPoints = {
+        target.Character.PrimaryPart.Position, -- Центр
+        target.Character.PrimaryPart.Position + Vector3.new(0, 2, 0), -- Верх
+        target.Character.PrimaryPart.Position - Vector3.new(0, 1.5, 0), -- Низ
+    }
+    
+    local visiblePoints = 0
+    
+    for _, checkPoint in ipairs(checkPoints) do
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, target.Character}
+        
+        local direction = checkPoint - shootFrom
+        
+        local rayResult = workspace:Raycast(shootFrom, direction, rayParams)
+        
+        -- Если луч не попал ни во что - точка видна
+        if not rayResult then
+            visiblePoints = visiblePoints + 1
+        else
+            local hitPart = rayResult.Instance
+            local hitParent = hitPart.Parent
+            
+            -- Проверяем что луч НЕ попал в препятствие
+            local isObstacle = false
+            
+            -- Проверка на стены
+            if hitPart.Name == "Glass" or hitParent.Name == "Walls" or hitParent.Name == "Wall" then
+                isObstacle = true
+            end
+            
+            -- Проверка на двери
+            if hitParent.Name == "Doors" or hitParent.Name == "Door" or hitPart.Name:find("Door") then
+                isObstacle = true
+            end
+            
+            -- Проверка на любые твердые объекты (CanCollide = true)
+            if hitPart.CanCollide then
+                isObstacle = true
+            end
+            
+            -- Проверка на объекты карты
+            if hitParent.Parent and hitParent.Parent.Name == "Map" then
+                if hitParent.Name ~= "Tools" and hitParent.Name ~= "Keys" and hitParent.Name ~= "Chests" then
+                    isObstacle = true
+                end
+            end
+            
+            -- Если это не препятствие - точка видна
+            if not isObstacle then
+                visiblePoints = visiblePoints + 1
+            end
+        end
+    end
+    
+    -- Бабушка видна только если видно минимум 2 из 3 точек (больше половины тела)
+    return visiblePoints >= 2
+end
+
+-- Автосбор ключей (только для Toddler)
+spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            if Settings.AutoPickupKeys and LocalPlayer.Status.Team.Value == "Toddler" and LocalPlayer.Status.Keys.Value < 3 then
+                if workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Keys") then
+                    for _, key in pairs(workspace.Map.Keys:GetChildren()) do
+                        if key:IsA("BasePart") or key:IsA("Model") then
+                            PickupKey:Fire(true, key)
+                            task.wait(0.1)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Автооткрытие сундуков (только для Toddler)
+spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            if Settings.AutoOpenChests and LocalPlayer.Status.Team.Value == "Toddler" then
+                if workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Chests") then
+                    for _, chest in pairs(workspace.Map.Chests:GetChildren()) do
+                        if not chest:GetAttribute("IsOpened") then
+                            OpenChest:Fire(true, chest)
+                            task.wait(0.1)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Автосбор оружия (только для Toddler, только если нет оружия)
+spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            if Settings.AutoPickupWeapons and LocalPlayer.Status.Team.Value == "Toddler" then
+                local hasTool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if not hasTool then
+                    if workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Tools") then
+                        local closestTool = nil
+                        local closestDistance = math.huge
+                        
+                        for _, tool in pairs(workspace.Map.Tools:GetChildren()) do
+                            if tool:IsA("Model") and tool.PrimaryPart then
+                                local distance = (tool:GetPivot().Position - LocalPlayer.Character.PrimaryPart.Position).Magnitude
+                                if distance < closestDistance and distance < 100 then
+                                    closestDistance = distance
+                                    closestTool = tool
+                                end
+                            end
+                        end
+                        
+                        if closestTool then
+                            PickupTool:Fire(true, closestTool.Name, closestTool, closestTool:GetAttribute("UniqueThrownId"))
+                            task.wait(0.5)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Автострельба по бабушке (бросок оружия или стрельба)
+spawn(function()
+    while task.wait(0.1) do
+        pcall(function()
+            if Settings.AutoShoot and LocalPlayer.Status.Team.Value == "Toddler" then
+                local equippedTool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                
+                if equippedTool and equippedTool.PrimaryPart then
+                    -- Список оружия которым нужно стрелять а не бросать
+                    local shootableWeapons = {
+                        "Bazooka", "BazookaSnow", "BoomLauncher", "BubbleGun", "HeartBubbleGun",
+                        "ChickenGun", "IceCreamGun", "IceLauncher", "SnowGun", "Bow"
+                    }
+                    
+                    local isShootable = false
+                    for _, weaponName in ipairs(shootableWeapons) do
+                        if equippedTool.Name == weaponName then
+                            isShootable = true
+                            break
+                        end
+                    end
+                    
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer and player.Character and player.Character.PrimaryPart and player.Status.Team.Value == "Granny" then
+                            -- Проверяем дистанцию до бабушки
+                            local distance = (player.Character.PrimaryPart.Position - equippedTool.PrimaryPart.Position).Magnitude
+                            
+                            -- Максимальная дальность стрельбы/броска (в стадах)
+                            local maxRange = isShootable and 150 or 100
+                            
+                            if distance <= maxRange then
+                                -- Передаем позицию оружия в проверку видимости
+                                if CanSeeTarget(player, equippedTool.PrimaryPart.Position) then
+                                    if isShootable then
+                                        -- Стреляем из оружия
+                                        local FireTool = Warp.Client("FireTool")
+                                        FireTool:Fire(false, equippedTool, player.Character.PrimaryPart.Position)
+                                        print("Стреляю из:", equippedTool.Name, "дистанция:", math.floor(distance))
+                                    else
+                                        -- Бросаем оружие
+                                        local targetPos = player.Character.PrimaryPart.Position - Vector3.new(0, 2, 0)
+                                        local velocity = player.Character.PrimaryPart.AssemblyLinearVelocity
+                                        local travelTime = distance / 80
+                                        local predictedPos = targetPos + (velocity * travelTime)
+                                        
+                                        IndicateThrowTool:Fire(true, equippedTool, predictedPos, 70)
+                                        print("Бросаю:", equippedTool.Name, "дистанция:", math.floor(distance))
+                                    end
+                                    task.wait(1)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Автовыполнение заданий (только для Granny)
+spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            if Settings.AutoGrannyTasks and LocalPlayer.Status.Team.Value == "Granny" then
+                if workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("TaskItems") then
+                    for _, taskItem in pairs(workspace.Map.TaskItems:GetChildren()) do
+                        CompleteGrannyTask:Fire(true, taskItem)
+                        task.wait(0.1)
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+print("Автофарм активен: ключи, сундуки, оружие, автострельба, задания")
+
+-- ============ ESP ============
+local grannyESP = {}
+local itemESP = {}
+
+-- Функция создания ESP для бабушки
+local function UpdateGrannyESP()
+    if not Settings.ESPGranny then
+        -- Удаляем все ESP если выключено
+        for player, espData in pairs(grannyESP) do
+            espData.Highlight:Destroy()
+            espData.BillboardGui:Destroy()
+            grannyESP[player] = nil
+        end
+        return
+    end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            if player.Status.Team.Value == "Granny" then
+                if not grannyESP[player] then
+                    -- Создаем Highlight
+                    local highlight = Instance.new("Highlight")
+                    highlight.Parent = player.Character
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineTransparency = 0
+                    
+                    -- Создаем BillboardGui для текста
+                    local billboard = Instance.new("BillboardGui")
+                    billboard.Parent = player.Character.HumanoidRootPart
+                    billboard.Size = UDim2.new(0, 200, 0, 50)
+                    billboard.StudsOffset = Vector3.new(0, 3, 0)
+                    billboard.AlwaysOnTop = true
+                    
+                    local textLabel = Instance.new("TextLabel")
+                    textLabel.Parent = billboard
+                    textLabel.Size = UDim2.new(1, 0, 1, 0)
+                    textLabel.BackgroundTransparency = 1
+                    textLabel.TextScaled = true
+                    textLabel.Font = Enum.Font.SourceSansBold
+                    textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    textLabel.TextStrokeTransparency = 0
+                    
+                    grannyESP[player] = {
+                        Highlight = highlight,
+                        BillboardGui = billboard,
+                        TextLabel = textLabel
+                    }
+                end
+                
+                -- Обновляем текст с ником и дистанцией
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local distance = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                    grannyESP[player].TextLabel.Text = string.format("%s\n%.0f studs", player.Name, distance)
+                end
+            else
+                -- Удаляем ESP если игрок больше не бабушка
+                if grannyESP[player] then
+                    grannyESP[player].Highlight:Destroy()
+                    grannyESP[player].BillboardGui:Destroy()
+                    grannyESP[player] = nil
+                end
+            end
+        else
+            -- Удаляем ESP если персонаж исчез
+            if grannyESP[player] then
+                grannyESP[player].Highlight:Destroy()
+                grannyESP[player].BillboardGui:Destroy()
+                grannyESP[player] = nil
+            end
+        end
+    end
+end
+
+-- Функция создания ESP для предметов (не подсвечивает предметы бабушки)
+local function UpdateItemESP()
+    if not Settings.ESPWeapons then
+        -- Удаляем все ESP если выключено
+        for tool, espData in pairs(itemESP) do
+            espData[1]:Destroy()
+            espData[2]:Destroy()
+            itemESP[tool] = nil
+        end
+        return
+    end
+    
+    if not workspace:FindFirstChild("Map") then return end
+    
+    -- Список предметов бабушки (не показываем их)
+    local grannyItems = {
+        "Taser", "StinkySpray", "Medkit", "Table",
+        "Trap", "SmokeBomb", "BoogieBomb", "Plant", "Radar"
+    }
+    
+    -- ESP для оружия (только из папки Tools, не TaskItems и не предметы бабушки)
+    if workspace.Map:FindFirstChild("Tools") then
+        for _, tool in pairs(workspace.Map.Tools:GetChildren()) do
+            if not itemESP[tool] and tool:IsA("Model") and tool.PrimaryPart then
+                -- Проверяем что это не предмет бабушки
+                local isGrannyItem = false
+                for _, grannyItemName in ipairs(grannyItems) do
+                    if tool.Name == grannyItemName then
+                        isGrannyItem = true
+                        break
+                    end
+                end
+                
+                if not isGrannyItem then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Parent = tool
+                    highlight.FillColor = Color3.fromRGB(255, 255, 0)
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 0)
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineTransparency = 0
+                    
+                    local billboard = Instance.new("BillboardGui")
+                    billboard.Parent = tool.PrimaryPart
+                    billboard.Size = UDim2.new(0, 200, 0, 30)
+                    billboard.StudsOffset = Vector3.new(0, 2, 0)
+                    billboard.AlwaysOnTop = true
+                    
+                    local textLabel = Instance.new("TextLabel")
+                    textLabel.Parent = billboard
+                    textLabel.Size = UDim2.new(1, 0, 1, 0)
+                    textLabel.BackgroundTransparency = 1
+                    textLabel.TextScaled = true
+                    textLabel.Font = Enum.Font.SourceSansBold
+                    textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                    textLabel.TextStrokeTransparency = 0
+                    textLabel.Text = tool.Name
+                    
+                    itemESP[tool] = {highlight, billboard}
+                    
+                    tool.AncestryChanged:Connect(function()
+                        if not tool:IsDescendantOf(workspace.Map.Tools) then
+                            if itemESP[tool] then
+                                itemESP[tool][1]:Destroy()
+                                itemESP[tool][2]:Destroy()
+                                itemESP[tool] = nil
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    end
+    
+    -- Удаляем ESP с предметов которые взяли
+    for tool, espData in pairs(itemESP) do
+        if not tool:IsDescendantOf(workspace.Map.Tools) then
+            espData[1]:Destroy()
+            espData[2]:Destroy()
+            itemESP[tool] = nil
+        end
+    end
+end
+
+-- Удаление ESP при выходе игрока
+Players.PlayerRemoving:Connect(function(player)
+    if grannyESP[player] then
+        grannyESP[player].Highlight:Destroy()
+        grannyESP[player].BillboardGui:Destroy()
+        grannyESP[player] = nil
+    end
+end)
+
+-- Обновление ESP
+RunService.Heartbeat:Connect(function()
+    UpdateGrannyESP()
+    UpdateItemESP()
+end)
+
+print("ESP активен: бабушка (красный с ником), оружие (желтый)")
