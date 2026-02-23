@@ -321,8 +321,11 @@ local function CanSeeTarget(target, weaponPosition)
             if hitPart.Name == "Glass" or hitParent.Name == "Walls" or hitParent.Name == "Wall" then
                 return false
             end
-            if hitParent.Name == "Doors" or hitParent.Name == "Door" or hitPart.Name:find("Door") then
-                return false
+            -- Проверка на дверь: ищем MeshPart с именем "Main" внутри модели Door
+            if hitPart.Name == "Main" and hitPart:IsA("MeshPart") then
+                if hitParent and hitParent.Name == "Door" and hitParent.Parent and hitParent.Parent.Name == "Doors" then
+                    return false
+                end
             end
             if hitPart.CanCollide then
                 return false
@@ -368,9 +371,11 @@ local function CanSeeTarget(target, weaponPosition)
                 isObstacle = true
             end
             
-            -- Проверка на двери
-            if hitParent.Name == "Doors" or hitParent.Name == "Door" or hitPart.Name:find("Door") then
-                isObstacle = true
+            -- Проверка на дверь: ищем MeshPart с именем "Main" внутри модели Door
+            if hitPart.Name == "Main" and hitPart:IsA("MeshPart") then
+                if hitParent and hitParent.Name == "Door" and hitParent.Parent and hitParent.Parent.Name == "Doors" then
+                    isObstacle = true
+                end
             end
             
             -- Проверка на любые твердые объекты (CanCollide = true)
@@ -490,8 +495,8 @@ spawn(function()
                             -- Проверяем дистанцию до бабушки
                             local distance = (player.Character.PrimaryPart.Position - equippedTool.PrimaryPart.Position).Magnitude
                             
-                            -- Максимальная дальность стрельбы/броска (в стадах)
-                            local maxRange = isShootable and 80 or 60
+                            -- Максимальная дальность стрельбы/броска (в стадах) - УМЕНЬШЕНА
+                            local maxRange = isShootable and 50 or 40
                             
                             if distance <= maxRange then
                                 -- Передаем позицию оружия в проверку видимости
@@ -501,13 +506,19 @@ spawn(function()
                                         local FireTool = Warp.Client("FireTool")
                                         FireTool:Fire(false, equippedTool, player.Character.PrimaryPart.Position)
                                     else
-                                        -- Бросаем оружие
-                                        local targetPos = player.Character.PrimaryPart.Position - Vector3.new(0, 2, 0)
-                                        local velocity = player.Character.PrimaryPart.AssemblyLinearVelocity
-                                        local travelTime = distance / 80
-                                        local predictedPos = targetPos + (velocity * travelTime)
+                                        -- Бросаем оружие НАПРЯМУЮ в бабушку (магнит сам притянет)
+                                        local throwPower = 70 -- Сила броска
                                         
-                                        IndicateThrowTool:Fire(true, equippedTool, predictedPos, 70)
+                                        -- Целевая позиция - НИЖЕ центра бабушки (в живот/ноги)
+                                        local targetPos = player.Character.PrimaryPart.Position - Vector3.new(0, 3, 0)
+                                        
+                                        -- Простое предсказание движения
+                                        local targetVelocity = player.Character.PrimaryPart.AssemblyLinearVelocity
+                                        local estimatedTime = distance / throwPower
+                                        local predictedTarget = targetPos + (targetVelocity * estimatedTime * 0.3)
+                                        
+                                        -- Кидаем напрямую в предсказанную позицию (магнит доведет до цели)
+                                        IndicateThrowTool:Fire(true, equippedTool, predictedTarget, throwPower)
                                     end
                                     task.wait(0.3) -- Короткая задержка между выстрелами
                                 end
@@ -543,29 +554,31 @@ print("- Стрельба: каждые 0.05 сек (задержка 0.3 сек
 print("- Задания бабушки: каждые 0.1 сек")
 
 -- ============ МАГНИТ ПРЕДМЕТОВ ============
--- Притягивает брошенные предметы к бабушке с обходом препятствий
+-- Притягивает брошенные предметы и пули к бабушке с обходом препятствий
 local processedItems = {}  -- Список обработанных предметов
 local itemStuckTime = {}  -- Время застревания предметов
 
 spawn(function()
     while task.wait(0.03) do
         pcall(function()
-            if Settings.MagnetItems and workspace:FindFirstChild("Thrown") then
-                for _, thrownItem in pairs(workspace.Thrown:GetChildren()) do
-                    if thrownItem:IsA("Model") and thrownItem.PrimaryPart and not processedItems[thrownItem] then
-                        -- Ищем ближайшую бабушку
-                        local closestGranny = nil
-                        local closestDistance = math.huge
-                        
-                        for _, player in pairs(Players:GetPlayers()) do
-                            if player.Status.Team.Value == "Granny" and player.Character and player.Character.PrimaryPart then
-                                local distance = (player.Character.PrimaryPart.Position - thrownItem.PrimaryPart.Position).Magnitude
-                                if distance < closestDistance then
-                                    closestDistance = distance
-                                    closestGranny = player
+            if Settings.MagnetItems then
+                -- Магнит для брошенных предметов
+                if workspace:FindFirstChild("Thrown") then
+                    for _, thrownItem in pairs(workspace.Thrown:GetChildren()) do
+                        if thrownItem:IsA("Model") and thrownItem.PrimaryPart and not processedItems[thrownItem] then
+                            -- Ищем ближайшую бабушку
+                            local closestGranny = nil
+                            local closestDistance = math.huge
+                            
+                            for _, player in pairs(Players:GetPlayers()) do
+                                if player.Status.Team.Value == "Granny" and player.Character and player.Character.PrimaryPart then
+                                    local distance = (player.Character.PrimaryPart.Position - thrownItem.PrimaryPart.Position).Magnitude
+                                    if distance < closestDistance then
+                                        closestDistance = distance
+                                        closestGranny = player
+                                    end
                                 end
                             end
-                        end
                         
                         if closestGranny and closestGranny.Character and closestGranny.Character.PrimaryPart then
                             local targetPos = closestGranny.Character.PrimaryPart.Position
@@ -666,6 +679,53 @@ spawn(function()
                                 local currentVelocity = thrownItem.PrimaryPart.AssemblyLinearVelocity
                                 local magnetForce = attractionDirection * 15
                                 thrownItem.PrimaryPart.AssemblyLinearVelocity = currentVelocity + magnetForce
+                            end
+                        end
+                    end
+                end
+                end -- закрытие for _, thrownItem
+                
+                -- Магнит для пуль от стреляющего оружия
+                if workspace:FindFirstChild("Bullets") then
+                    for _, bullet in pairs(workspace.Bullets:GetChildren()) do
+                        if bullet:IsA("BasePart") and not processedItems[bullet] then
+                            -- Ищем ближайшую бабушку
+                            local closestGranny = nil
+                            local closestDistance = math.huge
+                            
+                            for _, player in pairs(Players:GetPlayers()) do
+                                if player.Status.Team.Value == "Granny" and player.Character and player.Character.PrimaryPart then
+                                    local distance = (player.Character.PrimaryPart.Position - bullet.Position).Magnitude
+                                    if distance < closestDistance then
+                                        closestDistance = distance
+                                        closestGranny = player
+                                    end
+                                end
+                            end
+                            
+                            if closestGranny and closestGranny.Character and closestGranny.Character.PrimaryPart then
+                                local targetPos = closestGranny.Character.PrimaryPart.Position
+                                local bulletPos = bullet.Position
+                                local distance = (targetPos - bulletPos).Magnitude
+                                
+                                -- Если пуля близко к бабушке - отпускаем
+                                if distance < 3 then
+                                    processedItems[bullet] = true
+                                    
+                                    bullet.AncestryChanged:Connect(function()
+                                        if not bullet:IsDescendantOf(workspace) then
+                                            processedItems[bullet] = nil
+                                        end
+                                    end)
+                                else
+                                    -- Направление к бабушке
+                                    local direction = (targetPos - bulletPos).Unit
+                                    
+                                    -- Применяем силу притяжения к пуле
+                                    local currentVelocity = bullet.AssemblyLinearVelocity
+                                    local magnetForce = direction * 20
+                                    bullet.AssemblyLinearVelocity = currentVelocity + magnetForce
+                                end
                             end
                         end
                     end
